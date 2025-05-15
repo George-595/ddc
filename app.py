@@ -259,8 +259,7 @@ if submit_button:
                 extra_headers={
                     "HTTP-Referer": YOUR_SITE_URL,
                     "X-Title": YOUR_SITE_NAME,
-                },
-                api_key=OPENROUTER_API_KEY # Explicitly passing API key
+                }
             )
             
             logger.info("Successfully received response from OpenRouter")
