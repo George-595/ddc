@@ -30,7 +30,7 @@ st.set_page_config(
 OPENROUTER_API_KEY = "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"
 YOUR_SITE_URL = "https://www.ddcfoods.co.uk"
 YOUR_SITE_NAME = "DDC Foods AI Assistant"
-MODEL_NAME = "deepseek/deepseek-chat-v3-0324:free"
+MODEL_NAME = "qwen/qwen3-235b-a22b:free"
 
 SYSTEM_PROMPT = """✅ SYSTEM PROMPT – DDC FOODS AI ASSISTANT
 
