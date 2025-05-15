@@ -1,5 +1,6 @@
 import streamlit as st
-from openai import OpenAI
+import requests
+import json
 import pandas as pd
 import pdfplumber
 import io
@@ -101,12 +102,6 @@ Live data can be cross-verified via:
 	•	Brand-specific pages (e.g., KIND, The Collective)
 """
 
-# Initialize OpenAI client
-client = OpenAI(
-  base_url="https://openrouter.ai/api/v1",
-  api_key=OPENROUTER_API_KEY,
-)
-
 # Streamlit app title
 st.title(YOUR_SITE_NAME)
 
@@ -207,19 +202,28 @@ if submit_button:
         api_call_messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
         
     try:
-        completion = client.chat.completions.create(
-            extra_headers={
+        response = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
                 "HTTP-Referer": YOUR_SITE_URL,
                 "X-Title": YOUR_SITE_NAME,
             },
-            model=MODEL_NAME,
-            messages=api_call_messages
+            data=json.dumps({
+                "model": MODEL_NAME,
+                "messages": api_call_messages
+            })
         )
-        response = completion.choices[0].message.content
-
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        with st.chat_message("assistant"):
-            st.markdown(response)
+        
+        response_data = response.json()
+        if response.status_code == 200:
+            assistant_response = response_data['choices'][0]['message']['content']
+            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+            with st.chat_message("assistant"):
+                st.markdown(assistant_response)
+        else:
+            st.error(f"API Error: {response.status_code} - {response_data.get('error', 'Unknown error')}")
 
     except Exception as e:
         st.error(f"An error occurred with the API call: {e}")
