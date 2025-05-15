@@ -257,15 +257,23 @@ if submit_button:
             }
             logger.debug(f"API Request Payload: {json.dumps(api_request_payload, indent=2)}")
             
+            # Prepare headers with proper Bearer format
+            headers = {
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": YOUR_SITE_URL,
+                "X-Title": YOUR_SITE_NAME,
+            }
+            
+            # Log headers (excluding sensitive info)
+            safe_headers = headers.copy()
+            safe_headers["Authorization"] = "Bearer [HIDDEN]"
+            logger.debug(f"Request Headers: {json.dumps(safe_headers, indent=2)}")
+            
             response = requests.post(
                 url="https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": YOUR_SITE_URL,
-                    "X-Title": YOUR_SITE_NAME,
-                },
-                data=json.dumps(api_request_payload)
+                headers=headers,
+                json=api_request_payload  # Using json parameter instead of data for proper JSON encoding
             )
             
             logger.info(f"API Response Status Code: {response.status_code}")
