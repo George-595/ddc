@@ -254,12 +254,13 @@ if submit_button:
             logger.debug(f"API Request Messages: {json.dumps(api_call_messages, indent=2)}")
             
             completion = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=api_call_messages,
                 extra_headers={
                     "HTTP-Referer": YOUR_SITE_URL,
                     "X-Title": YOUR_SITE_NAME,
                 },
-                model=MODEL_NAME,
-                messages=api_call_messages
+                api_key=OPENROUTER_API_KEY # Explicitly passing API key
             )
             
             logger.info("Successfully received response from OpenRouter")
