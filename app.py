@@ -30,7 +30,7 @@ st.set_page_config(
 OPENROUTER_API_KEY = "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"
 YOUR_SITE_URL = "https://www.ddcfoods.co.uk"
 YOUR_SITE_NAME = "DDC Foods AI Assistant"
-MODEL_NAME = "google/gemini-2.5-pro-exp-03-25"
+MODEL_NAME = "google/gemini-2.0-flash-exp:free"
 
 SYSTEM_PROMPT = """✅ SYSTEM PROMPT – DDC FOODS AI ASSISTANT
 
@@ -146,8 +146,8 @@ for message in st.session_state.messages:
 with st.form(key="chat_form"):
     user_text_prompt = st.text_input("Your message:", key="user_prompt_text_key")
     uploaded_file = st.file_uploader( # Merged file uploader
-        "Upload File (Excel or PDF, optional)",
-        type=["xlsx", "xls", "pdf"],
+        "Upload File (Excel, PDF, or Image, optional)",
+        type=["xlsx", "xls", "pdf", "png", "jpg", "jpeg"],
         key="file_uploader_key" # New key for the merged uploader
     )
     submit_button = st.form_submit_button(label="Send / Process Files")
@@ -175,6 +175,7 @@ if submit_button:
         file_bytes = uploaded_file.getvalue()
         
         processed_this_file = False
+        file_type = None # To determine if it's an image for later display
 
         if file_name.lower().endswith((".xlsx", ".xls")):
             try:
@@ -185,6 +186,7 @@ if submit_button:
                 user_api_content_parts.append({"type": "text", "text": file_content_for_api})
                 user_display_message_parts.append(f"(Attached Excel: {file_name})")
                 processed_this_file = True
+                file_type = "excel"
                 logger.info(f"Successfully processed Excel file: {file_name}")
             except Exception as e:
                 logger.error(f"Error processing Excel file {file_name}: {str(e)}")
@@ -214,11 +216,38 @@ if submit_button:
                 user_api_content_parts.append({"type": "text", "text": file_content_for_api})
                 user_display_message_parts.append(f"(Attached PDF: {file_name})")
                 processed_this_file = True
+                file_type = "pdf"
                 logger.info(f"Successfully processed PDF file: {file_name}")
             except Exception as e:
                 logger.error(f"Error processing PDF file {file_name}: {str(e)}")
                 st.error(f"Error processing PDF file {file_name}: {e}")
                 user_display_message_parts.append(f"(Failed to process PDF: {file_name})")
+        
+        elif file_name.lower().endswith((".png", ".jpg", ".jpeg")):
+            import base64
+            try:
+                logger.info(f"Processing image file: {file_name}")
+                base64_image = base64.b64encode(file_bytes).decode('utf-8')
+                mime_type = f"image/{file_name.split('.')[-1].lower()}"
+                if mime_type == "image/jpg": mime_type = "image/jpeg" # Common practice
+                
+                data_url = f"data:{mime_type};base64,{base64_image}"
+                
+                user_api_content_parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": data_url}
+                })
+                user_display_message_parts.append(f"(Attached Image: {file_name})")
+                # Store image data for display if needed, or just the fact it's an image
+                st.session_state.last_uploaded_image_bytes = file_bytes 
+                st.session_state.last_uploaded_image_name = file_name
+                processed_this_file = True
+                file_type = "image"
+                logger.info(f"Successfully processed image file: {file_name}")
+            except Exception as e:
+                logger.error(f"Error processing image file {file_name}: {str(e)}")
+                st.error(f"Error processing image file {file_name}: {e}")
+                user_display_message_parts.append(f"(Failed to process Image: {file_name})")
 
     if not user_api_content_parts:
         logger.warning("No processable content found")
@@ -230,6 +259,14 @@ if submit_button:
 
     with st.chat_message("user"):
         st.markdown(final_user_display_message)
+        # Display uploaded image if it was the last processed file and there's text
+        if "last_uploaded_image_bytes" in st.session_state and \
+           uploaded_file and file_name == st.session_state.last_uploaded_image_name:
+            if file_type == "image": # ensure it was indeed an image that got processed
+                 st.image(st.session_state.last_uploaded_image_bytes, caption=f"Uploaded: {st.session_state.last_uploaded_image_name}", width=300)
+            # Clean up after display
+            del st.session_state.last_uploaded_image_bytes
+            del st.session_state.last_uploaded_image_name
     
     with st.spinner("DDC AI is thinking..."):
         api_call_messages = []
@@ -259,7 +296,8 @@ if submit_button:
                 extra_headers={
                     "HTTP-Referer": YOUR_SITE_URL,
                     "X-Title": YOUR_SITE_NAME,
-                }
+                },
+                extra_body={} # Added extra_body as per user's config
             )
             
             logger.info("Successfully received response from OpenRouter")
@@ -284,5 +322,6 @@ if submit_button:
 #    pandas
 #    openpyxl
 #    pdfplumber
+#    openai # Added openai as it's used directly
 #    Run: pip install -r requirements.txt
 # 3. Run in your terminal: streamlit run app.py 
