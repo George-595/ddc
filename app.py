@@ -23,14 +23,7 @@ logger = logging.getLogger(__name__)
 st.set_page_config(
     page_title="DDC Foods AI Assistant", # Uses YOUR_SITE_NAME
     page_icon="🛒", # Generic store/cart icon
-    layout="centered",
-    theme={
-        "primaryColor": "#008000",  # Dark Green
-        "backgroundColor": "#1E1E1E",  # Very Dark Grey
-        "secondaryBackgroundColor": "#2E2E2E",  # Darker Grey
-        "textColor": "#FFFFFF",  # White
-        "font": "sans serif"
-    }
+    layout="centered"
 )
 
 # Configuration
