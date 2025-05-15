@@ -4,7 +4,20 @@ import json
 import pandas as pd
 import pdfplumber
 import io
+import logging
+from datetime import datetime
 from openai import OpenAI
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),  # Output to terminal
+        logging.FileHandler(f'ddc_ai_assistant_{datetime.now().strftime("%Y%m%d")}.log')  # Output to daily log file
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # Page Configuration - MUST BE THE FIRST STREAMLIT COMMAND
 st.set_page_config(
@@ -140,8 +153,10 @@ with st.form(key="chat_form"):
     submit_button = st.form_submit_button(label="Send / Process Files")
 
 if submit_button:
+    logger.info("Form submitted - Processing user input and files")
     # Updated condition to check the single uploaded_file
     if not user_text_prompt.strip() and not uploaded_file:
+        logger.warning("No input provided - neither message nor file")
         st.warning("Please enter a message or upload a file.")
         st.stop()
 
@@ -149,38 +164,46 @@ if submit_button:
     user_display_message_parts = []
 
     if user_text_prompt.strip():
+        logger.info(f"Processing text prompt: {user_text_prompt}")
         user_api_content_parts.append({"type": "text", "text": user_text_prompt})
         user_display_message_parts.append(user_text_prompt)
 
     # Consolidated file processing logic for the single uploader
     if uploaded_file:
         file_name = uploaded_file.name
+        logger.info(f"Processing uploaded file: {file_name}")
         file_bytes = uploaded_file.getvalue()
         
-        processed_this_file = False # Flag to track if the current file was processed
+        processed_this_file = False
 
         if file_name.lower().endswith((".xlsx", ".xls")):
             try:
+                logger.info(f"Processing Excel file: {file_name}")
                 df = pd.read_excel(io.BytesIO(file_bytes))
                 excel_json = df.to_json(orient="records", indent=2)
                 file_content_for_api = f"--- Content from Excel file: {file_name} ---\n{excel_json}"
                 user_api_content_parts.append({"type": "text", "text": file_content_for_api})
                 user_display_message_parts.append(f"(Attached Excel: {file_name})")
                 processed_this_file = True
+                logger.info(f"Successfully processed Excel file: {file_name}")
             except Exception as e:
+                logger.error(f"Error processing Excel file {file_name}: {str(e)}")
                 st.error(f"Error processing Excel file {file_name}: {e}")
                 user_display_message_parts.append(f"(Failed to process Excel: {file_name})")
 
         elif file_name.lower().endswith(".pdf"):
             try:
+                logger.info(f"Processing PDF file: {file_name}")
                 pdf_text_parts = []
                 with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
                     for page_num, page in enumerate(pdf.pages):
+                        logger.info(f"Processing PDF page {page_num + 1}")
                         page_text = page.extract_text()
                         if page_text and page_text.strip():
                             pdf_text_parts.append(f"--- Page {page_num + 1} of {file_name} ---\n{page_text.strip()}")
                 
                 if not pdf_text_parts:
+                    logger.warning(f"No text extracted from PDF file: {file_name}")
                     file_content_for_api = f"--- No text could be extracted from PDF file: {file_name} ---"
                 else:
                     file_content_for_api = (
@@ -191,20 +214,14 @@ if submit_button:
                 user_api_content_parts.append({"type": "text", "text": file_content_for_api})
                 user_display_message_parts.append(f"(Attached PDF: {file_name})")
                 processed_this_file = True
+                logger.info(f"Successfully processed PDF file: {file_name}")
             except Exception as e:
+                logger.error(f"Error processing PDF file {file_name}: {str(e)}")
                 st.error(f"Error processing PDF file {file_name}: {e}")
                 user_display_message_parts.append(f"(Failed to process PDF: {file_name})")
-        else:
-            # This case should ideally not be reached due to the 'type' filter in st.file_uploader
-            st.warning(f"Unsupported file type: {file_name}. Please upload an Excel or PDF file.")
-            user_display_message_parts.append(f"(Unsupported file: {file_name})")
 
-    # If no text prompt was provided AND (either no file was uploaded, or the uploaded file failed to produce API content)
-    # then there's nothing to send.
     if not user_api_content_parts:
-        # This condition is met if:
-        # 1. No text prompt, and no file uploaded (already caught by the initial check, but good to be robust).
-        # 2. No text prompt, file uploaded, but processing failed or yielded no parsable content.
+        logger.warning("No processable content found")
         st.warning("No content to send. Please type a message or upload a processable file and ensure it's not empty.")
         st.stop()
 
@@ -233,6 +250,13 @@ if submit_button:
             api_call_messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
             
         try:
+            logger.info("Preparing API request to OpenRouter")
+            api_request_payload = {
+                "model": MODEL_NAME,
+                "messages": api_call_messages
+            }
+            logger.debug(f"API Request Payload: {json.dumps(api_request_payload, indent=2)}")
+            
             response = requests.post(
                 url="https://openrouter.ai/api/v1/chat/completions",
                 headers={
@@ -241,25 +265,29 @@ if submit_button:
                     "HTTP-Referer": YOUR_SITE_URL,
                     "X-Title": YOUR_SITE_NAME,
                 },
-                data=json.dumps({
-                    "model": MODEL_NAME,
-                    "messages": api_call_messages
-                })
+                data=json.dumps(api_request_payload)
             )
             
+            logger.info(f"API Response Status Code: {response.status_code}")
             response_data = response.json()
+            logger.debug(f"API Response Data: {json.dumps(response_data, indent=2)}")
+            
             if response.status_code == 200:
                 assistant_response = response_data['choices'][0]['message']['content']
+                logger.info("Successfully received assistant response")
+                logger.debug(f"Assistant Response: {assistant_response}")
+                
                 st.session_state.messages.append({"role": "assistant", "content": assistant_response})
                 with st.chat_message("assistant"):
                     st.markdown(assistant_response)
             else:
                 error_payload = response_data.get('error', 'Unknown error')
+                logger.error(f"API Error: {response.status_code} - {str(error_payload)}")
                 st.error(f"API Error: {response.status_code} - {str(error_payload)}")
     
         except Exception as e:
+            logger.error(f"Exception during API call: {str(e)}", exc_info=True)
             st.error(f"An error occurred with the API call: {str(e)}")
-        # Spinner automatically ends when 'with' block exits
     
     st.rerun()
 
