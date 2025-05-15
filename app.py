@@ -301,12 +301,25 @@ if submit_button:
             )
             
             logger.info("Successfully received response from OpenRouter")
-            assistant_response = completion.choices[0].message.content
-            logger.debug(f"Assistant Response: {assistant_response}")
+            assistant_response = None # Initialize
+            if completion and completion.choices and len(completion.choices) > 0 and completion.choices[0].message:
+                assistant_response = completion.choices[0].message.content
+            else:
+                logger.error(f"API response did not contain expected choices. Full response: {completion}")
+                st.error("Received an unexpected or empty response from the AI. Please check the logs.")
+                # Potentially stop or handle more gracefully
             
-            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
-            with st.chat_message("assistant"):
-                st.markdown(assistant_response)
+            logger.debug(f"Assistant Response: {assistant_response}")
+
+            if assistant_response: # Only proceed if we have a valid response
+                st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+                with st.chat_message("assistant"):
+                    st.markdown(assistant_response)
+            else:
+                # If assistant_response is still None, it means an error was logged.
+                # We might not want to add an empty assistant message or rerun immediately.
+                # For now, it will simply not display a new assistant message and rerun.
+                pass
     
         except Exception as e:
             logger.error(f"Exception during API call: {str(e)}", exc_info=True)
