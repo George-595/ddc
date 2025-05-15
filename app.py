@@ -23,14 +23,21 @@ logger = logging.getLogger(__name__)
 st.set_page_config(
     page_title="DDC Foods AI Assistant", # Uses YOUR_SITE_NAME
     page_icon="🛒", # Generic store/cart icon
-    layout="centered"
+    layout="centered",
+    theme={
+        "primaryColor": "#008000",  # Dark Green
+        "backgroundColor": "#1E1E1E",  # Very Dark Grey
+        "secondaryBackgroundColor": "#2E2E2E",  # Darker Grey
+        "textColor": "#FFFFFF",  # White
+        "font": "sans serif"
+    }
 )
 
 # Configuration
 OPENROUTER_API_KEY = "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"
 YOUR_SITE_URL = "https://www.ddcfoods.co.uk"
 YOUR_SITE_NAME = "DDC Foods AI Assistant"
-MODEL_NAME = "qwen/qwen3-235b-a22b:free"
+MODEL_NAME = "deepseek/deepseek-chat-v3-0324:free"
 
 SYSTEM_PROMPT = """✅ SYSTEM PROMPT – DDC FOODS AI ASSISTANT
 
@@ -141,6 +148,12 @@ for message in st.session_state.messages:
     if message["role"] != "system":
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+            if message["role"] == "user" and "image_bytes_for_display" in message:
+                st.image(
+                    message["image_bytes_for_display"],
+                    caption=f"Uploaded: {message.get('image_name_for_display', 'Image')}",
+                    width=300
+                )
 
 # Chat input and file upload form
 with st.form(key="chat_form"):
@@ -169,6 +182,10 @@ if submit_button:
         user_display_message_parts.append(user_text_prompt)
 
     # Consolidated file processing logic for the single uploader
+    processed_image_file_bytes = None
+    processed_image_file_name = None
+    # file_type is already declared and used below, will help identify if image was processed
+    
     if uploaded_file:
         file_name = uploaded_file.name
         logger.info(f"Processing uploaded file: {file_name}")
@@ -238,11 +255,11 @@ if submit_button:
                     "image_url": {"url": data_url}
                 })
                 user_display_message_parts.append(f"(Attached Image: {file_name})")
-                # Store image data for display if needed, or just the fact it's an image
-                st.session_state.last_uploaded_image_bytes = file_bytes 
-                st.session_state.last_uploaded_image_name = file_name
+                # Store image data for attaching to the history message
+                processed_image_file_bytes = file_bytes
+                processed_image_file_name = file_name
                 processed_this_file = True
-                file_type = "image"
+                file_type = "image" # Make sure file_type is set here
                 logger.info(f"Successfully processed image file: {file_name}")
             except Exception as e:
                 logger.error(f"Error processing image file {file_name}: {str(e)}")
@@ -255,18 +272,16 @@ if submit_button:
         st.stop()
 
     final_user_display_message = "\n".join(user_display_message_parts).strip()
-    st.session_state.messages.append({"role": "user", "content": final_user_display_message})
+    
+    user_message_for_history = {"role": "user", "content": final_user_display_message}
+    if processed_image_file_bytes and processed_image_file_name and file_type == "image":
+        user_message_for_history["image_bytes_for_display"] = processed_image_file_bytes
+        user_message_for_history["image_name_for_display"] = processed_image_file_name
+        
+    st.session_state.messages.append(user_message_for_history)
 
-    with st.chat_message("user"):
-        st.markdown(final_user_display_message)
-        # Display uploaded image if it was the last processed file and there's text
-        if "last_uploaded_image_bytes" in st.session_state and \
-           uploaded_file and file_name == st.session_state.last_uploaded_image_name:
-            if file_type == "image": # ensure it was indeed an image that got processed
-                 st.image(st.session_state.last_uploaded_image_bytes, caption=f"Uploaded: {st.session_state.last_uploaded_image_name}", width=300)
-            # Clean up after display
-            del st.session_state.last_uploaded_image_bytes
-            del st.session_state.last_uploaded_image_name
+    # The immediate display of the user message is removed from here to prevent duplication.
+    # It will be displayed by the loop at the top of the script after st.rerun().
     
     with st.spinner("DDC AI is thinking..."):
         api_call_messages = []
@@ -307,14 +322,14 @@ if submit_button:
             else:
                 logger.error(f"API response did not contain expected choices. Full response: {completion}")
                 st.error("Received an unexpected or empty response from the AI. Please check the logs.")
-                # Potentially stop or handle more gracefully
+                assistant_response = None # Ensure it's None if there's an issue
             
             logger.debug(f"Assistant Response: {assistant_response}")
 
             if assistant_response: # Only proceed if we have a valid response
                 st.session_state.messages.append({"role": "assistant", "content": assistant_response})
-                with st.chat_message("assistant"):
-                    st.markdown(assistant_response)
+                # The immediate display of the assistant message is removed from here.
+                # It will be displayed by the loop at the top of the script after st.rerun().
             else:
                 # If assistant_response is still None, it means an error was logged.
                 # We might not want to add an empty assistant message or rerun immediately.
