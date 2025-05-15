@@ -167,8 +167,10 @@ if submit_button:
             if not pdf_text_parts:
                 pdf_content_for_api = f"--- No text could be extracted from PDF file: {uploaded_pdf.name} ---"
             else:
-                pdf_content_for_api = f"--- Content from PDF file: {uploaded_pdf.name} ---
-" + "\n\n".join(pdf_text_parts)
+                pdf_content_for_api = (
+                    f"--- Content from PDF file: {uploaded_pdf.name} ---\n"
+                    + "\n\n".join(pdf_text_parts)
+                )
             
             user_api_content_parts.append({"type": "text", "text": pdf_content_for_api})
             user_display_message_parts.append(f"(Attached PDF: {uploaded_pdf.name})")
