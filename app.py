@@ -9,14 +9,7 @@ import io
 st.set_page_config(
     page_title="DDC Foods AI Assistant", # Uses YOUR_SITE_NAME
     page_icon="🛒", # Generic store/cart icon
-    layout="centered",
-    theme={
-        "primaryColor": "#7DBA00",       # DDC's lighter, active green
-        "backgroundColor": "#004d2b",    # Dark green background
-        "secondaryBackgroundColor": "#00331c", # Darker green for elements like chat input
-        "textColor": "#FFFFFF",           # White text
-        "font": "sans serif"
-    }
+    layout="centered"
 )
 
 # Configuration
