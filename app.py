@@ -4,6 +4,7 @@ import json
 import pandas as pd
 import pdfplumber
 import io
+from openai import OpenAI
 
 # Page Configuration - MUST BE THE FIRST STREAMLIT COMMAND
 st.set_page_config(
@@ -112,6 +113,12 @@ Live data can be cross-verified via:
 # Streamlit app title
 st.title(YOUR_SITE_NAME)
 
+# Initialize OpenAI client
+client = OpenAI(
+  base_url="https://openrouter.ai/api/v1",
+  api_key=OPENROUTER_API_KEY,
+)
+
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -207,49 +214,52 @@ if submit_button:
     with st.chat_message("user"):
         st.markdown(final_user_display_message)
     
-    api_call_messages = []
-    system_prompt_in_payload = False
-    for msg_idx, historic_msg in enumerate(st.session_state.messages):
-        if historic_msg["role"] == "system":
-            api_call_messages.append(historic_msg)
-            system_prompt_in_payload = True
-        elif historic_msg["role"] == "user":
-            if msg_idx == len(st.session_state.messages) - 1:
-                api_call_messages.append({"role": "user", "content": user_api_content_parts})
-            else: 
-                api_call_messages.append({"role": "user", "content": [{"type": "text", "text": historic_msg["content"]}]})
-        elif historic_msg["role"] == "assistant":
-            api_call_messages.append({"role": "assistant", "content": historic_msg["content"]})
+    with st.spinner("DDC AI is thinking..."):
+        api_call_messages = []
+        system_prompt_in_payload = False
+        for msg_idx, historic_msg in enumerate(st.session_state.messages):
+            if historic_msg["role"] == "system":
+                api_call_messages.append(historic_msg)
+                system_prompt_in_payload = True
+            elif historic_msg["role"] == "user":
+                if msg_idx == len(st.session_state.messages) - 1:
+                    api_call_messages.append({"role": "user", "content": user_api_content_parts})
+                else: 
+                    api_call_messages.append({"role": "user", "content": [{"type": "text", "text": historic_msg["content"]}]})
+            elif historic_msg["role"] == "assistant":
+                api_call_messages.append({"role": "assistant", "content": historic_msg["content"]})
 
-    if not system_prompt_in_payload:
-        api_call_messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
-        
-    try:
-        response = requests.post(
-            url="https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": YOUR_SITE_URL,
-                "X-Title": YOUR_SITE_NAME,
-            },
-            data=json.dumps({
-                "model": MODEL_NAME,
-                "messages": api_call_messages
-            })
-        )
-        
-        response_data = response.json()
-        if response.status_code == 200:
-            assistant_response = response_data['choices'][0]['message']['content']
-            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
-            with st.chat_message("assistant"):
-                st.markdown(assistant_response)
-        else:
-            st.error(f"API Error: {response.status_code} - {response_data.get('error', 'Unknown error')}")
-
-    except Exception as e:
-        st.error(f"An error occurred with the API call: {e}")
+        if not system_prompt_in_payload:
+            api_call_messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+            
+        try:
+            response = requests.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": YOUR_SITE_URL,
+                    "X-Title": YOUR_SITE_NAME,
+                },
+                data=json.dumps({
+                    "model": MODEL_NAME,
+                    "messages": api_call_messages
+                })
+            )
+            
+            response_data = response.json()
+            if response.status_code == 200:
+                assistant_response = response_data['choices'][0]['message']['content']
+                st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+                with st.chat_message("assistant"):
+                    st.markdown(assistant_response)
+            else:
+                error_payload = response_data.get('error', 'Unknown error')
+                st.error(f"API Error: {response.status_code} - {str(error_payload)}")
+    
+        except Exception as e:
+            st.error(f"An error occurred with the API call: {str(e)}")
+        # Spinner automatically ends when 'with' block exits
     
     st.rerun()
 
@@ -257,7 +267,7 @@ if submit_button:
 # 1. Save as app.py
 # 2. Make sure you have the required packages installed. Create a requirements.txt file with:
 #    streamlit
-#    openai
+#    requests
 #    pandas
 #    openpyxl
 #    pdfplumber
