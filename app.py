@@ -30,7 +30,7 @@ st.set_page_config(
 OPENROUTER_API_KEY = "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"
 YOUR_SITE_URL = "https://www.ddcfoods.co.uk"
 YOUR_SITE_NAME = "DDC Foods AI Assistant"
-MODEL_NAME = "google/gemini-2.0-flash-exp:free"
+MODEL_NAME = "google/gemini-2.5-pro-exp-03-25"
 
 SYSTEM_PROMPT = """✅ SYSTEM PROMPT – DDC FOODS AI ASSISTANT
 
@@ -126,10 +126,10 @@ Live data can be cross-verified via:
 # Streamlit app title
 st.title(YOUR_SITE_NAME)
 
-# Initialize OpenAI client
+# Initialize OpenAI client with OpenRouter configuration
 client = OpenAI(
-  base_url="https://openrouter.ai/api/v1",
-  api_key=OPENROUTER_API_KEY,
+    base_url="https://openrouter.ai/api/v1",
+    api_key=OPENROUTER_API_KEY,
 )
 
 # Initialize chat history
@@ -250,48 +250,25 @@ if submit_button:
             api_call_messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
             
         try:
-            logger.info("Preparing API request to OpenRouter")
-            api_request_payload = {
-                "model": MODEL_NAME,
-                "messages": api_call_messages
-            }
-            logger.debug(f"API Request Payload: {json.dumps(api_request_payload, indent=2)}")
+            logger.info("Preparing API request to OpenRouter using OpenAI client")
+            logger.debug(f"API Request Messages: {json.dumps(api_call_messages, indent=2)}")
             
-            # Prepare headers with proper Bearer format
-            headers = {
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": YOUR_SITE_URL,
-                "X-Title": YOUR_SITE_NAME,
-            }
-            
-            # Log headers (excluding sensitive info)
-            safe_headers = headers.copy()
-            safe_headers["Authorization"] = "Bearer [HIDDEN]"
-            logger.debug(f"Request Headers: {json.dumps(safe_headers, indent=2)}")
-            
-            response = requests.post(
-                url="https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json=api_request_payload  # Using json parameter instead of data for proper JSON encoding
+            completion = client.chat.completions.create(
+                extra_headers={
+                    "HTTP-Referer": YOUR_SITE_URL,
+                    "X-Title": YOUR_SITE_NAME,
+                },
+                model=MODEL_NAME,
+                messages=api_call_messages
             )
             
-            logger.info(f"API Response Status Code: {response.status_code}")
-            response_data = response.json()
-            logger.debug(f"API Response Data: {json.dumps(response_data, indent=2)}")
+            logger.info("Successfully received response from OpenRouter")
+            assistant_response = completion.choices[0].message.content
+            logger.debug(f"Assistant Response: {assistant_response}")
             
-            if response.status_code == 200:
-                assistant_response = response_data['choices'][0]['message']['content']
-                logger.info("Successfully received assistant response")
-                logger.debug(f"Assistant Response: {assistant_response}")
-                
-                st.session_state.messages.append({"role": "assistant", "content": assistant_response})
-                with st.chat_message("assistant"):
-                    st.markdown(assistant_response)
-            else:
-                error_payload = response_data.get('error', 'Unknown error')
-                logger.error(f"API Error: {response.status_code} - {str(error_payload)}")
-                st.error(f"API Error: {response.status_code} - {str(error_payload)}")
+            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+            with st.chat_message("assistant"):
+                st.markdown(assistant_response)
     
         except Exception as e:
             logger.error(f"Exception during API call: {str(e)}", exc_info=True)
